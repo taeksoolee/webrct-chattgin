@@ -1,163 +1,189 @@
 import { io } from "socket.io-client";
-import { EventParams } from "socket.io/dist/typed-events";
+import SocketEvent from "../enums/SocketEvent";
+import Message from "./interfaces/Message";
 
-const localVideo = document.getElementById('localVideo') as HTMLVideoElement;
-const remoteVideo = document.getElementById('remoteVideo') as HTMLVideoElement;
-let localStream: MediaStream | null = null;
-let remoteStream: MediaStream | null = null;
+class RTCHelper {
+  private readonly localVideo = document.getElementById('localVideo') as HTMLVideoElement;
+  private readonly remoteVideo = document.getElementById('remoteVideo') as HTMLVideoElement;
+  private localStream: MediaStream | null = null;
+  private remoteStream: MediaStream | null = null;
 
-let isStarted = false;
-let isInitiator = false;
-let isChannelReady = false;
+  private isStarted = false;
+  private isInitiator = false;
+  private isChannelReady = false;
 
-let room = 'foo';
+  private peerConnection: RTCPeerConnection | null = null;
+  privatesessionDescription: RTCLocalSessionDescriptionInit | undefined = undefined;
 
-let pc: RTCPeerConnection;
+  private readonly socket = io('ws://localhost:4000', {
+    
+  });
+  private room: string = 'foo';
 
-let sessionDescription: RTCLocalSessionDescriptionInit | undefined = undefined;
-const socket = io();
-
-if(room !== '') {
-  socket.emit('create or join', room);
-  console.log('Attempted to create or join Room', room);
-}
-
-socket.on('created', (room: string, id: string) => {
-  console.log('Created room' + room+'socket ID : '+id);
-  isInitiator= true;
-})
-
-socket.on('full', (room: string) => {
-  console.log('Room '+room+'is full');
-});
-
-socket.on('join',(room: string) => {
-  console.log('Another peer made a request to join room' + room);
-  console.log('This peer is the initiator of room' + room + '!');
-  isChannelReady = true;
-});
-
-socket.on('joined', (room: string) => {
-  console.log('joined : '+ room );
-  isChannelReady= true;
-});
-
-socket.on('log', (array: any[]) => {
-  console.log.apply(console,array);
-});
-
-socket.on('message', (message) => {
-  console.log('Client received message :',message);
-  if(message === 'got user media'){
-    maybeStart();
-  }else if(message.type === 'offer'){
-    if(!isInitiator && !isStarted){
-      maybeStart();
+  constructor() {
+    if(this.room !== ''){
+      this.socket.emit(SocketEvent.CREATE_OR_JOIN, this.room);
+      console.log('Attempted to create or join Room', this.room);
+    } else {
+      console.error('require room name');
     }
-    pc.setRemoteDescription(new RTCSessionDescription(message));
-    doAnswer();
-  }else if(message.type ==='answer' && isStarted){
-    pc.setRemoteDescription(new RTCSessionDescription(message));
-  }else if(message.type ==='candidate' &&isStarted){
-    const candidate = new RTCIceCandidate({
-      sdpMLineIndex : message.label,
-      candidate:message.candidate
+
+    this.socket.on(SocketEvent.CREATED, (room: string, id: string) => {
+      console.log('Created room' + room+'socket ID : '+id);
+      this.isInitiator= true;
+    })
+    
+    this.socket.on(SocketEvent.FULL, (room: string) => {
+      console.log('Room '+room+'is full');
+    });
+    
+    this.socket.on(SocketEvent.JOIN, (room: string) => {
+      console.log('Another peer made a request to join room' + room);
+      console.log('This peer is the initiator of room' + room + '!');
+      this.isChannelReady = true;
+    });
+    
+    this.socket.on(SocketEvent.JOINED, (room: string) => {
+      console.log('joined : '+ room );
+      this.isChannelReady= true;
+    });
+    
+    this.socket.on(SocketEvent.LOG, (array: any[]) => {
+      console.log.apply(console,array);
+    });
+    
+    this.socket.on(SocketEvent.MESSAGE, (message) => {
+      console.log('Client received message :',message);
+      if (message === 'got user media'){
+        this.maybeStart();
+      } else if(message.type === 'offer'){
+        if(!this.isInitiator && !this.isStarted){
+          this.maybeStart();
+        }
+        this.peerConnection?.setRemoteDescription(new RTCSessionDescription(message));
+        this.doAnswer();
+      }else if(message.type ==='answer' && this.isStarted){
+        this.peerConnection?.setRemoteDescription(new RTCSessionDescription(message));
+      }else if(message.type ==='candidate' && this.isStarted){
+        const candidate = new RTCIceCandidate({
+          sdpMLineIndex : message.label,
+          candidate:message.candidate
+        });
+    
+        this.peerConnection?.addIceCandidate(candidate);
+      }
     });
 
-    pc.addIceCandidate(candidate);
-  }
-})
-
-
-
-
-function sendMessage(message: {
-  type: string,
-  label: number | null,
-  id: string | null,
-  candidate: string,
-} | RTCLocalSessionDescriptionInit | string | undefined){
-  console.log('Client sending message: ', message);
-  socket.emit('message', message);
-}
-
-function createPeerConnection() {
-  try {
-    pc = new RTCPeerConnection();
-    pc.onicecandidate = (event) => {
-      console.log("iceCandidateEvent", event);
-      if (event.candidate) {
-        sendMessage({
-          type: "candidate",
-          label: event.candidate.sdpMLineIndex,
-          id: event.candidate.sdpMid,
-          candidate: event.candidate.candidate,
-        });
-      } else {
-        console.log("end of candidates");
-      }
-    };
-    
-    (pc as any).onaddstream = (event: any) =>{
-      console.log("remote stream added");
-      remoteStream = event.stream;
-      remoteVideo.srcObject = remoteStream;
-    };
-    console.log("Created RTCPeerConnection");
-  } catch (e) {
-    alert("connot create RTCPeerConnection object");
-    return;
-  }
-}
-
-function maybeStart() {
-  console.log(">>MaybeStart() : ", isStarted, localStream, isChannelReady);
-  if (!isStarted && typeof localStream !== "undefined" && isChannelReady) {
-    console.log(">>>>> creating peer connection");
-    createPeerConnection();
-    (pc as any).addStream(localStream);
-    isStarted = true;
-    console.log("isInitiator : ", isInitiator);
-    if (isInitiator) {
-      console.log("Sending offer to peer");
-      pc.createOffer(
-        () => {
-          if(sessionDescription) {}
-          pc.setLocalDescription(sessionDescription);
-          sendMessage(sessionDescription);
-        }, 
-        () => {
-          console.log("createOffer() error: ", event);
-        });
-    }
-  }else{
-    console.error('maybeStart not Started!');
-  }
-}
-
-async function run() {
-  try {
-    const stream = await navigator.mediaDevices
+    navigator.mediaDevices
       .getUserMedia({
         video: true,
         audio: false,
+      })
+      .then((stream) => {
+        console.log("Adding local stream");
+        this.localStream = stream;
+        this.localVideo.srcObject = stream;
+        this.sendMessage("got user media");
+        
+        if (this.isInitiator) {
+          this.maybeStart();
+        }
+      })
+      .catch(console.error);
+  }
+
+  sendMessage(message: Message | RTCLocalSessionDescriptionInit | string | undefined) {
+    console.log('Client sending message: ',message);
+    this.socket.emit(SocketEvent.MESSAGE, message);
+  }
+
+  createPeerConnection() {
+    try {
+      this.peerConnection = new RTCPeerConnection();
+      this.peerConnection.addEventListener('icecandidate', (event) => {
+        console.log("iceCandidateEvent", event);
+        if (event.candidate) {
+          this.sendMessage({
+            type: "candidate",
+            label: event.candidate.sdpMLineIndex,
+            id: event.candidate.sdpMid,
+            candidate: event.candidate.candidate,
+          });
+        } else {
+          console.log("end of candidates");
+        }
       });
 
-    console.log("Adding local stream");
-    localStream = stream;
+      // 😣 deprecated
+      // this.peerConnection.addEventListener('addstream', (event) => {
+      //   console.log("remote stream added");
+      //   this.remoteStream = event.stream;
 
-    sendMessage("got user media");
+      //   this.remoteVideo.srcObject = this.remoteStream;
+      // });
 
-    if(isInitiator) {
-      maybeStart();
+      this.peerConnection.addEventListener('track', (event) => {
+        console.log("remote stream added");
+        this.remoteStream = event.streams[0];
+
+        this.remoteVideo.srcObject = this.remoteStream;
+      });
+
+      console.log("Created RTCPeerConnection");
+    } catch (e) {
+      alert("connot create RTCPeerConnection object");
+      return;
     }
-  } catch(err) {
-    console.error(err);
+  }
+
+  maybeStart() {
+    console.log(">>MaybeStart() : ", this.isStarted, this.localStream, this.isChannelReady);
+    if (!this.isStarted && typeof this.localStream !== "undefined" && this.isChannelReady) {
+    // if(true) {
+      console.log(">>>>> creating peer connection");
+      this.createPeerConnection();
+
+      // 😣 deprecated
+      // this.peerConnection?.addStream(this.localStream); // 삭제된 메서드
+      this.localStream?.getTracks().forEach((track) => {
+        this.peerConnection?.addTrack(track, this.localStream as MediaStream);
+      });
+
+      this.isStarted = true;
+      console.log("isInitiator : ", this.isInitiator);
+      if (this.isInitiator) {
+        this.doCall();
+      }
+    } else{
+      console.error('maybeStart not Started!');
+    }
+  }
+
+  doCall() {
+    console.log("Sending offer to peer");
+    this.peerConnection?.createOffer(
+      this.setLocalAndSendMessage, 
+      (event) => {
+        console.log('createOffer() error: ', event);
+      }
+    );
+  }
+
+  doAnswer() {
+    console.log("Sending answer to peer");
+    this.peerConnection?.createAnswer().then(
+      this.setLocalAndSendMessage,
+      (error) => {
+        console.error("Falied to create session Description", error);
+      }
+    );
+  }
+
+  setLocalAndSendMessage(sessionDescription: RTCSessionDescriptionInit) {
+    this.peerConnection?.setLocalDescription(sessionDescription);
+    this.sendMessage(sessionDescription);
   }
 
 }
 
-
-run();
-
-  
+new RTCHelper();
