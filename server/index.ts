@@ -27,18 +27,19 @@ io.sockets.on('connection', socket => {
 
   socket.on(SocketEvent.MESSAGE, message => {
     console.log('message', message);
-    socket.broadcast.emit(SocketEvent.MESSAGE, message);
+    socket.emit(SocketEvent.MESSAGE, message);
   })
 
   socket.on(SocketEvent.CREATE_OR_JOIN, (room: string) => {
-    const roomSize = io.sockets.adapter.rooms.size;
-    console.log(roomSize);
+    const roomSize: number = io.sockets.adapter.rooms.get(room)?.size || 0;
 
-    if(roomSize === 1) {
+    console.log(room, io.sockets.adapter.rooms.get(room), roomSize);
+
+    if(roomSize === 0) {
       console.log('create room!');
       socket.join(room);
       socket.emit(SocketEvent.CREATED, room, socket.id);
-    } else if(roomSize === 2) {
+    } else if(roomSize === 1) {
       console.log('join room!');
       io.sockets.emit(SocketEvent.JOIN, room);
       socket.join(room);

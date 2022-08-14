@@ -23,28 +23,28 @@ class RTCHelper {
   constructor() {
     if(this.room !== ''){
       this.socket.emit(SocketEvent.CREATE_OR_JOIN, this.room);
-      console.log('Attempted to create or join Room', this.room);
+      console.log(`Attempted to create or join Room ${this.room}`);
     } else {
       console.error('require room name');
     }
 
     this.socket.on(SocketEvent.CREATED, (room: string, id: string) => {
-      console.log('Created room' + room+'socket ID : '+id);
-      this.isInitiator= true;
+      console.log(`Created room ${room} socket ID : ${id}`);
+      this.isInitiator = true;
     })
     
     this.socket.on(SocketEvent.FULL, (room: string) => {
-      console.log('Room '+room+'is full');
+      console.log(`Room ${room} is full`);
     });
     
     this.socket.on(SocketEvent.JOIN, (room: string) => {
-      console.log('Another peer made a request to join room' + room);
-      console.log('This peer is the initiator of room' + room + '!');
+      console.log(`Another peer made a request to join room ${room}`);
+      console.log(`This peer is the initiator of room ${room}!`);
       this.isChannelReady = true;
     });
     
     this.socket.on(SocketEvent.JOINED, (room: string) => {
-      console.log('joined : '+ room );
+      console.log(`joined : ${room}` );
       this.isChannelReady= true;
     });
     
@@ -53,7 +53,7 @@ class RTCHelper {
     });
     
     this.socket.on(SocketEvent.MESSAGE, (message) => {
-      console.log('Client received message :',message);
+      console.log(`Client received message : ${message}`);
       if (message === 'got user media'){
         this.maybeStart();
       } else if(message.type === 'offer'){
@@ -62,9 +62,9 @@ class RTCHelper {
         }
         this.peerConnection?.setRemoteDescription(new RTCSessionDescription(message));
         this.doAnswer();
-      }else if(message.type ==='answer' && this.isStarted){
+      }else if(message.type === 'answer' && this.isStarted){
         this.peerConnection?.setRemoteDescription(new RTCSessionDescription(message));
-      }else if(message.type ==='candidate' && this.isStarted){
+      }else if(message.type === 'candidate' && this.isStarted){
         const candidate = new RTCIceCandidate({
           sdpMLineIndex : message.label,
           candidate:message.candidate
@@ -80,10 +80,10 @@ class RTCHelper {
         audio: false,
       })
       .then((stream) => {
-        console.log("Adding local stream");
+        console.log(`Adding local stream`);
         this.localStream = stream;
         this.localVideo.srcObject = stream;
-        this.sendMessage("got user media");
+        this.sendMessage(`got user media`);
         
         if (this.isInitiator) {
           this.maybeStart();
@@ -93,7 +93,7 @@ class RTCHelper {
   }
 
   sendMessage(message: Message | RTCLocalSessionDescriptionInit | string | undefined) {
-    console.log('Client sending message: ',message);
+    console.log(`Client sending message: ${message}`);
     this.socket.emit(SocketEvent.MESSAGE, message);
   }
 
@@ -110,42 +110,61 @@ class RTCHelper {
             candidate: event.candidate.candidate,
           });
         } else {
-          console.log("end of candidates");
+          console.log(`end of candidates`);
         }
       });
 
       // 😣 deprecated
       // this.peerConnection.addEventListener('addstream', (event) => {
       //   console.log("remote stream added");
-      //   this.remoteStream = event.stream;
+      //   this.remoteStream = (event as any).stream;
 
       //   this.remoteVideo.srcObject = this.remoteStream;
       // });
 
+    
+      console.log('regist track event handler');
       this.peerConnection.addEventListener('track', (event) => {
-        console.log("remote stream added");
-        this.remoteStream = event.streams[0];
+        console.log(`track event handler`)
+        console.log(`remote stream added`);
 
-        this.remoteVideo.srcObject = this.remoteStream;
+        
+
+        if(event.streams && event.streams[0]) {
+          this.remoteStream = event.streams[0];
+          this.remoteVideo.srcObject = this.remoteStream;
+        } else {
+          if (!this.remoteStream) {
+            this.remoteStream = new MediaStream();
+            this.remoteVideo.srcObject = this.remoteStream;
+          }
+          this.remoteStream.addTrack(event.track);
+        }
+
+        
+
+
+        
       });
 
-      console.log("Created RTCPeerConnection");
+      console.log(`Created RTCPeerConnection`);
     } catch (e) {
-      alert("connot create RTCPeerConnection object");
+      alert(`connot create RTCPeerConnection object`);
       return;
     }
   }
 
   maybeStart() {
-    console.log(">>MaybeStart() : ", this.isStarted, this.localStream, this.isChannelReady);
+    console.log(`>> MaybeStart() : `, this.isStarted, this.localStream, this.isChannelReady);
     if (!this.isStarted && typeof this.localStream !== "undefined" && this.isChannelReady) {
     // if(true) {
-      console.log(">>>>> creating peer connection");
+      console.log(`>>>>> creating peer connection`);
       this.createPeerConnection();
 
       // 😣 deprecated
       // this.peerConnection?.addStream(this.localStream); // 삭제된 메서드
       this.localStream?.getTracks().forEach((track) => {
+        console.log('added track', track, this.localStream);
         this.peerConnection?.addTrack(track, this.localStream as MediaStream);
       });
 
