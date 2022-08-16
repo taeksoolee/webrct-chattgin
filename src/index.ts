@@ -106,7 +106,12 @@ async function hangup() {
 
 function createPeerConnection() {
   console.log('>>> createPeerConnection');
-  pc = new RTCPeerConnection();
+  pc = new RTCPeerConnection({
+    'iceServers': [
+      {'urls': 'stun:stun.stunprotocol.org:3478'},
+      {'urls': 'stun:stun.l.google.com:19302'},
+    ]
+  });
   pc.onicecandidate = event => {
     const message: CandidateMessage = {
       type: DataType.CANDIDATE,

@@ -28,6 +28,6 @@ io.sockets.on('connection', socket => {
 
   socket.on('message', message => {
     console.log('message', message);
-    socket.emit(SocketEvent.MESSAGE, message);
+    socket.broadcast.emit('message', message);
   });
 })
