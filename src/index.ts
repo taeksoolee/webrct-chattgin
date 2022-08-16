@@ -20,8 +20,6 @@ enum DataType {
   BYE='bye',
 };
 
-
-
 interface CandidateMessage {
   type: DataType.CANDIDATE;
   candidate: string | null;
