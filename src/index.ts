@@ -1,5 +1,7 @@
 // local test, between two tabs
 
+import CustomChannel from "@/classes/CustomChannel";
+
 const startButton = document.getElementById('startButton') as HTMLButtonElement;
 const hangupButton = document.getElementById('hangupButton') as HTMLButtonElement;
 hangupButton.disabled = true;
@@ -38,7 +40,7 @@ interface AnswerMessage {
 }
 
 
-const signaling = new BroadcastChannel('webrtc');
+const signaling = new CustomChannel();
 signaling.onmessage = (event) => {
   console.log(event.data);
   if(!localStream) {
