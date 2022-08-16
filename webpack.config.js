@@ -52,12 +52,11 @@ module.exports = {
     })
   ],
   resolve: {
-    extensions: ['.es6', '.js'],
+    extensions: ['.es6', '.js', '.ts', '.tsx', '.js', '.json'],
     modules: ['node_modules'],
     alias: {
       '@': path.resolve(__dirname, './src'),  // ./ 경로를 @으로 설정
       'Images': path.resolve(__dirname, './images'),
-      extensions: ['.ts', '.tsx', '.js', '.json'],
     },
   },
   devServer: {
