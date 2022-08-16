@@ -2,7 +2,7 @@ import e from "cors";
 import { io } from "socket.io-client";
 
 // const bc = new BroadcastChannel('webrtc');
-const s = io("ws://localhost:4000", {
+const s = io("ws://127.0.0.1:4000", {
   
 });
 
